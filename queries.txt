@@ -1,0 +1,125 @@
+﻿—-Question 1 : set 1
+SELECT f.title            AS "film_title",
+       c.NAME             AS "category_name",
+       Count(r.rental_id) AS "rental_count"
+FROM   film f
+       JOIN film_category fc
+         ON f.film_id = fc.film_id
+       JOIN category c
+         ON fc.category_id = c.category_id
+       JOIN inventory i
+         ON f.film_id = i.film_id
+       JOIN rental r
+         ON i.inventory_id = r.inventory_id
+WHERE  c.NAME IN ( 'Animation', 'Children', 'Classics', 'Comedy',
+                   'Family', 'Music' )
+GROUP  BY f.title,
+          c.NAME
+ORDER  BY c.NAME,
+          f.title; 
+
+
+
+
+
+
+—-Question 2 : set 1
+SELECT m.title,
+       cat.NAME,
+       m.rental_duration,
+       Ntile(4)
+         OVER (
+           ORDER BY m.rental_duration) AS standard_quartile
+FROM   film_category fCat
+       JOIN category cat
+         ON cat.category_id = fCat.category_id
+       JOIN film m
+         ON m.film_id = fCat.film_id
+WHERE  cat.NAME IN ( 'Animation', 'Children', 'Classics', 'Comedy',
+                     'Family', 'Music' )
+ORDER  BY m.rental_duration; 
+
+
+
+
+—- Question 3 : set 1    
+WITH rental_durations
+     AS (
+        --find the average rental duration for each film in family categories
+        SELECT f.film_id,
+               f.title,
+               c.name                                                    AS
+               category,
+               Round(Avg(r.return_date :: DATE - r.rental_date :: DATE)) AS
+               rental_duration
+         FROM   film f
+                join film_category fc
+                  ON f.film_id = fc.film_id
+                join category c
+                  ON fc.category_id = c.category_id
+                join inventory i
+                  ON f.film_id = i.film_id
+                join rental r
+                  ON i.inventory_id = r.inventory_id
+         WHERE  c.name IN ( 'Animation', 'Children', 'Classics', 'Comedy',
+                            'Family', 'Music' ) -- Family-friendly categories
+         GROUP  BY f.film_id,
+                   f.title,
+                   c.name),
+     quartiles
+     AS (
+        -- quartiles for rental durations in all movies
+        SELECT Round(Percentile_cont(0.25)
+                       within GROUP (ORDER BY rental_duration)) AS q1,
+               Round(Percentile_cont(0.50)
+                       within GROUP (ORDER BY rental_duration)) AS q2,
+               Round(Percentile_cont(0.75)
+                       within GROUP (ORDER BY rental_duration)) AS q3
+         FROM   (SELECT Round(Avg(r.return_date :: DATE -
+                        r.rental_date :: DATE)) AS
+                                rental_duration
+                 FROM   film f
+                        join inventory i
+                          ON f.film_id = i.film_id
+                        join rental r
+                          ON i.inventory_id = r.inventory_id
+                 GROUP  BY f.film_id) AS all_movies),
+     categorized_movies
+     AS (
+        -- determine a quartile for each movie 
+        SELECT rd.category,
+               CASE
+                 WHEN rd.rental_duration <= q.q1 THEN '1'
+                 WHEN rd.rental_duration <= q.q2 THEN '2'
+                 WHEN rd.rental_duration <= q.q3 THEN '3'
+                 ELSE '4'
+               END AS rental_length_category
+         FROM   rental_durations rd
+                cross join quartiles q)
+-- Count how many movies there are in each quartile grouped by category
+SELECT category,
+       rental_length_category,
+       Count(*) AS count
+FROM   categorized_movies
+GROUP  BY category,
+          rental_length_category
+ORDER  BY category,
+          rental_length_category; 
+
+
+
+
+
+
+-— Question 1 : set 2
+SELECT Strftime('%m', r.rental_date) AS Rental_month,
+       Strftime('%Y', r.rental_date) AS Rental_year,
+       i.store_id                    AS Store_ID,
+       Count(*)                      AS Count_rentals
+FROM   rental r
+       JOIN inventory i
+         ON r.inventory_id = i.inventory_id
+GROUP  BY i.store_id,
+          Strftime('%Y', r.rental_date),
+          Strftime('%m', r.rental_date)
+ORDER  BY count_rentals DESC;
